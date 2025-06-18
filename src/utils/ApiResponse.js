@@ -1,4 +1,4 @@
-import { asyncHandler } from "./asyncHandler"
+import { asyncHandler } from "./asyncHandler.js"
 
 class ApiResponse{
     constructor(statusCode,data,message="Success"){
