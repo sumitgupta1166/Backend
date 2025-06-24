@@ -111,13 +111,14 @@ const registerUser = asyncHandler(async (req, res) => {
 
   //user login
 });
+
 const loginUser = asyncHandler(async (req, res) => {
-  // req nody -> data
+  // req body -> data
   // username or email
   // find the user
   // password check
-  // accessor refresh token
-  // send cookie
+  // access or refresh token
+  // send cookie (send these token as cookies)
 
   const { email, username, password } = req.body;
   if (!username && !email) {
@@ -132,8 +133,8 @@ const loginUser = asyncHandler(async (req, res) => {
     throw new ApiError(404, "User does not exist");
   }
 
-  const isPasswordValid = await User.isPasswordCorrect(password);
-
+  const isPasswordValid = await user.isPasswordCorrect(password);
+  
   if (!isPasswordValid) {
     throw new ApiError(401, "Invalid user Credentials");
   }
@@ -146,6 +147,7 @@ const loginUser = asyncHandler(async (req, res) => {
   );
 
   const options = {
+    // through this part cookies are only modified through server
     httpOnly: true,
     secure: true,
   };
@@ -205,7 +207,7 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
       process.env.REFRESH_TOKEN_SECRET
     );
 
-    const user = User.findById(decodedToken?._id);
+    const user = await User.findById(decodedToken?._id);
 
     if (!user) {
       throw new ApiError(401, "Invalid refresh token");
@@ -239,7 +241,12 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
 });
 
 const changeCurrentPassword = asyncHandler(async (req, res) => {
-  const { oldPassword, newPassword } = req.body;
+  const { oldPassword, newPassword, confirmPassword } = req.body;
+
+  if(newPassword !==confirmPassword){
+    throw new ApiError(400, "New Password and Confirm Password do not match");
+  }
+  
   const user = await User.findById(refreshAccessToken.user?._id);
   const isPasswordCorrect = await user.isPasswordCorrect(oldPassword);
 
