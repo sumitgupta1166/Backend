@@ -195,7 +195,7 @@ const logoutUser = asyncHandler(async (req, res) => {
 });
 
 const refreshAccessToken = asyncHandler(async (req, res) => {
-  const incomingRefreshToken = req.cookie.refreshToken || req.body.refreshToken;
+  const incomingRefreshToken = req.cookies.refreshToken || req.body.refreshToken;
 
   if (!incomingRefreshToken) {
     throw new ApiError(401, "unauthorised token");
@@ -364,6 +364,7 @@ const getUserChannelProfile = asyncHandler(async(req,res)=>{
     throw new ApiError(400, "username is missing")
   }
 
+  const currentUserId = new mongoose.Types.ObjectId(req.user?._id); 
 
   //aggregate pipelines
   const channel = await User.aggregate([
@@ -396,12 +397,21 @@ const getUserChannelProfile = asyncHandler(async(req,res)=>{
         channelSubscribedToCount: {
           $size: "$subscribedTo"
         },
-        isSubscribed:{
-          $cond:{
-            if: {$in: [req.user?._id, "$subscribers.subscriber"]},
-            then: true,
-            else: false
-          }
+        // isSubscribed:{
+        //   $cond:{
+        //     if: {$in: [req.user?._id, "$subscribers.subscriber"]},
+        //     then: true,
+        //     else: false
+        //   }
+        // }
+        isSubscribed: {
+          $in: [currentUserId, {
+            $map: {
+              input: "$subscribers",
+              as: "s",
+              in: "$$s.subscriber"
+            }
+          }]
         }
       }
     },
@@ -418,6 +428,7 @@ const getUserChannelProfile = asyncHandler(async(req,res)=>{
       }
     }
   ])
+  // console.log("channel: ", channel)
   if(!channel?.length){
     throw new ApiError(404, "channel does not exists")
   }
@@ -429,27 +440,29 @@ const getUserChannelProfile = asyncHandler(async(req,res)=>{
   )
 })
 
-const getWatchHistory= asyncHandler(async(req,res) =>{
+const getWatchHistory = asyncHandler(async (req, res) => {
   const user = await User.aggregate([
     {
-      $match:{
+      $match: {
         _id: new mongoose.Types.ObjectId(req.user._id)
-      },
-      $lookup:{
-        from:"videos",
+      }
+    },
+    {
+      $lookup: {
+        from: "videos",
         localField: "watchHistory",
         foreignField: "_id",
         as: "watchHistory",
         pipeline: [
           {
-            $lookup:{
-              from:"users",
+            $lookup: {
+              from: "users",
               localField: "owner",
               foreignField: "_id",
               as: "owner",
               pipeline: [
                 {
-                  $project:{
+                  $project: {
                     fullname: 1,
                     username: 1,
                     avatar: 1
@@ -459,23 +472,26 @@ const getWatchHistory= asyncHandler(async(req,res) =>{
             }
           },
           {
-            $addFields:{
-              owner:{
-                $first: "$owner"
-              }
+            $addFields: {
+              owner: { $first: "$owner" }
             }
           }
         ]
       }
     }
-  ])
+  ]);
 
   return res
-  .status(200)
-  .json(200, user[0].watchHistory,
-    "Watch history fetched Successfully"
-  )
-})
+    .status(200)
+    .json(
+      new ApiResponse(
+        200,
+        user[0]?.watchHistory || [],
+        "Watch history fetched successfully"
+      )
+    );
+});
+
 
 export {
   registerUser,
